@@ -20,8 +20,16 @@ public class DataProcesser {
     private int lValue=7;
     private int dValue=5;
     private TreeNode root= null;
-    private int count= 0;
+//    private int count= 0;
 
+    //构造函数，初始化k,l,d值
+    public DataProcesser(int k,int l,int d){
+        this.kValue = k;
+        this.lValue = l;
+        this.dValue = d;
+    }
+
+    //填充数据，从MySQL获取数据，构造RowNode对象
     public DataProcesser fillData(){
         try{
             String url="jdbc:mysql://localhost:3306/dbsecurity";    //JDBC的URL
@@ -64,13 +72,14 @@ public class DataProcesser {
             rs.close();
             stmt.close();
             conn.close();
-            System.out.println(count);
+//            System.out.println(count);
         }catch(Exception e){
             e.printStackTrace();
         }
         return this;
     }
 
+    //用当前未用最小QID划分ValueSet,其中最小未用是ValueSet的qids属性
     public LinkedList<ValueSet> partition(ValueSet vs){
         vs.qids--;
         LinkedList<ValueSet> vsList = new LinkedList<ValueSet>();
@@ -231,19 +240,23 @@ public class DataProcesser {
          return vsList;
     }
 
-    //
+    //第一次划分：创建划分树
     public DataProcesser fin1(){
 
         ValueSet T = new ValueSet();
         T.list = rowList;
         createTree(T,null,kValue,lValue,5,5);
-        testReadTreeData(root);
+//        testReadTreeData(root);
         return this;
     }
 
+    /*  遍历第一次划分树，确定构造是否正确
     public void testRead(){
         testReadTreeData(root);
     }
+    */
+
+    /*  遍历第一次划分树，确定构造是否正确
     int ccc=0;
     public void testReadTreeData(TreeNode treeNode){
 
@@ -260,7 +273,10 @@ public class DataProcesser {
         System.out.println(ccc);
 //        System.out.println(mmm);
     }
-    int mmm=0;
+    */
+
+    int mmm=0;  //测试变量
+    //创建第一次划分的划分树
     public TreeNode createTree(ValueSet g,TreeNode parent,int k,int l,int n,int p){
 
         TreeNode currentNode = new TreeNode(g);
@@ -304,6 +320,7 @@ public class DataProcesser {
      return currentNode;
     }
 
+    //测试函数，获取一个ValueSet的SA值的个数
     public int getValueSetSentiveValueNum(ValueSet vs){
 
         LinkedList<RowNode> list = vs.list;
@@ -320,6 +337,7 @@ public class DataProcesser {
         return valueSet.size();
     }
 
+    //获取一个ValueSet的SA值，用于生成最后分组的SA值集
     public String getValueSetSensitiveValueSet(ValueSet vs){
         HashSet<String> vsSet = new HashSet<String>();
         String result = "{";
@@ -428,6 +446,7 @@ public class DataProcesser {
 
     LinkedList<ValueSet> tableValueSet = new LinkedList<ValueSet>();
 
+    //测试函数，测试fin1划分后得到的tableValueSet的记录数是否正确
     public void getTableValueSetNum(){
         prePublish(root);
         int i = 0;
@@ -443,14 +462,14 @@ public class DataProcesser {
     //此函数大概率没问题
     public void prePublish(TreeNode treeNode){
         if (treeNode.child.size()==0){
-            toTurbation(treeNode.vs,5);
+            toTurbation(treeNode.vs,lValue);
             tableValueSet.add(treeNode.vs);
         }else {
             for (Iterator iterator = treeNode.child.iterator();iterator.hasNext();){
                 prePublish((TreeNode)iterator.next());
             }
         }
-        System.out.println(toburbation);
+//        System.out.println(toburbation);
     }
 
     //重点检查此函数
@@ -540,7 +559,7 @@ public class DataProcesser {
         return i;
     }
 
-    //改进后使用全表ValueSet的Publish方法！        ==== 重点看下此函数
+    //改进后使用全表ValueSet的Publish方法！ 该函数为算法4的部分实现
     public LinkedList<ValueSet> finalPublish(ValueSet vs){
         LinkedList<ValueSet> tmpVsList = new LinkedList<ValueSet>();
         if (vs.qids < 0){
@@ -585,6 +604,7 @@ public class DataProcesser {
         return tmpVsList;
     }
 
+    //测试最终划分结果记录数是否正确
     public void getFinalResultValueSetNum(){
         int i = 0;
         for (Iterator iterator= finalResultValueSet.iterator();iterator.hasNext();){
@@ -592,10 +612,12 @@ public class DataProcesser {
         }
         System.out.println("总计："+i+"条记录 | "+"分组："+finalResultValueSet.size());
     }
+
     public LinkedList<ValueSet> getFinalResultValueSet() {
         return finalResultValueSet;
     }
 
+    //测试最终划分结果是否满足K匿名条件
     public void testFinalResulValueSetKlimit(){
         boolean flag = true;
         for (Iterator iterator = finalResultValueSet.iterator();iterator.hasNext();){
@@ -615,26 +637,48 @@ public class DataProcesser {
     //最终最终最终Publish()算法实现
     LinkedList<ValueSet> finalResultValueSet = new LinkedList<ValueSet>();
     public void goPublish(){
+        System.out.println("从MySQL读取数据构造表...");
+        fillData();
+        System.out.println("开始fin1划分...");
+        fin1();
         prePublish(root);
+        System.out.println("开始fin2划分...");
         for (Iterator iterator = tableValueSet.iterator();iterator.hasNext();){
             finalResultValueSet.addAll(finalPublish((ValueSet)iterator.next()));
-            System.out.println("processing!");
+//            System.out.println("processing!");
         }
-        System.out.println(finalResultValueSet.size());
+        getFinalResultValueSetNum();
+        testFinalResulValueSetKlimit();
+        System.out.println("写入文件");
     }
 
+    //把结果写文件
     public void writeResult(File file) throws IOException{
+        int row = 0;
         FileWriter writer = new FileWriter(file);
         BufferedWriter bufferedWriter = new BufferedWriter(writer);
         for (Iterator iterator = finalResultValueSet.iterator();iterator.hasNext();){
+            bufferedWriter.write("----------------------------------------------" +
+                    "------------------------------------");
+            bufferedWriter.newLine();
             ValueSet tmpVs = (ValueSet)iterator.next();
-            for (Iterator iterator1 = tmpVs.list.iterator();iterator.hasNext();){
-                bufferedWriter.write(iterator1.next().toString());
+            for (Iterator iterator1 = tmpVs.list.iterator();iterator1.hasNext();){
+                String rowNodeRecord = ((RowNode)iterator1.next()).toString();
+                bufferedWriter.write(rowNodeRecord);
+                row ++;
+                bufferedWriter.newLine();
             }
+            bufferedWriter.write("----------------------------------------------" +
+                    "------------------------------------");
+            bufferedWriter.newLine();
+            bufferedWriter.write(tmpVs.generalizeResult);
+            bufferedWriter.newLine();
         }
+        System.out.println("写入行数："+row);
     }
 
 
+    /*
     //最终发布时Publish算法
     public void publish(ValueSet vs){
         if (vs.qids < 0){
@@ -644,11 +688,14 @@ public class DataProcesser {
             valueSetLinkedList = partition(vs);
         }
     }
+
+    //测试函数，测试fin1划分结果
     public void testPublish(){
         prePublish(root);
     }
+    */
 
-
+    //概化处理函数，对数值型数值取范围
     public String getRange(ValueSet vs,int qids){
         int min = 1000000, max = 0;
         String range = null;
@@ -704,7 +751,7 @@ public class DataProcesser {
         }
         return range;
     }
-
+    //概化处理函数，对字符型数值取集合
     public String getSet(ValueSet vs,int qids){
         HashSet<String> vsSet = new HashSet<String>();
         String result = "{";
@@ -747,6 +794,7 @@ public class DataProcesser {
         return result + "}";
     }
 
+    //数据集类
     class ValueSet{
         public LinkedList<RowNode> list = new LinkedList<RowNode>();
         public int qids= 8;
@@ -759,7 +807,7 @@ public class DataProcesser {
 
         }
     }
-
+    //划分树节点类
     class TreeNode {
         private ValueSet vs = new ValueSet();
         private TreeNode parent = null;
@@ -1003,9 +1051,8 @@ public class DataProcesser {
 
         @Override
         public String toString(){
-            return new String("{ age:"+age+"\t education_num:"+education_num+"\t hours_per_week:"
-            +hours_per_week+"\t capital_gain:"+capital_gain+"\t \t race:"+race+"\t maritial_status:"+marital_status
-            +"\t native_country:"+native_country+"\t workclass:"+workclass+"\t occupation:"+occupation+"}");
+            return new String("{ race:"+raceSet+"\t \tworkclass:"+workclassSet+"\tmaritial_status:"+maritial_statusSet+"\teducation_num:"+education_numRange+"\tnative_country:"+native_countrySet
+                    +"\tage:"+ageRange+"\thours_per_week:"+hours_per_weekRange+"\tcapital_gain:"+capital_gainRange+"}");
         }
     }
 }
