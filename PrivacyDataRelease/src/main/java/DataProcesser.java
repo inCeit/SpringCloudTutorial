@@ -5,10 +5,7 @@ import jdk.nashorn.internal.objects.annotations.Setter;
 
 import sun.awt.image.ImageWatched;
 
-import java.io.BufferedWriter;
-import java.io.File;
-import java.io.FileWriter;
-import java.io.IOException;
+import java.io.*;
 import java.sql.*;
 
 import java.util.*;
@@ -20,13 +17,15 @@ public class DataProcesser {
     private int lValue=7;
     private int dValue=5;
     private TreeNode root= null;
+    private BufferedReader br;
 //    private int count= 0;
 
     //构造函数，初始化k,l,d值
-    public DataProcesser(int k,int l,int d){
+    public DataProcesser(int k,int l,int d,BufferedReader br){
         this.kValue = k;
         this.lValue = l;
         this.dValue = d;
+        this.br = br;
     }
 
     //填充数据，从MySQL获取数据，构造RowNode对象
@@ -76,6 +75,37 @@ public class DataProcesser {
         }catch(Exception e){
             e.printStackTrace();
         }
+        return this;
+    }
+
+    //填充数据，从文件获取数据构造RowNode对象
+    public DataProcesser fillDataFromFile(BufferedReader br) throws IOException{
+        String[] rowRecord;
+        String tmp = null;
+        tmp = br.readLine();
+        while (tmp != null){
+            rowRecord = tmp.split(",");
+            RowNode row = new RowNode();
+            row.setAge(Integer.valueOf(rowRecord[0]));
+            row.setWorkclass(rowRecord[1]);
+            row.setFnlwgt(Integer.valueOf(rowRecord[2]));
+            row.setEducation(rowRecord[3]);
+            row.setEducation_num(Integer.valueOf(rowRecord[4]));
+            row.setMarital_status(rowRecord[5]);
+            row.setOccupation(rowRecord[6]);
+            row.setRelationship(rowRecord[7]);
+            row.setRace(rowRecord[8]);
+            row.setSex(rowRecord[9]);
+            row.setCapital_gain(Integer.valueOf(rowRecord[10]));
+            row.setCapital_loss(Integer.valueOf(rowRecord[11]));
+            row.setHours_per_week(Integer.valueOf(rowRecord[12]));
+            row.setNative_country(rowRecord[13]);
+            row.setIncome(rowRecord[14].contains("1") ? true:false);
+            rowList.add(row);
+            tmp = br.readLine();
+        }
+        Collections.sort(rowList, new RowNodeComparator());
+        System.out.println(rowList.size());
         return this;
     }
 
@@ -366,7 +396,7 @@ public class DataProcesser {
             toburbation++;
             int limit = sensitiveValueList.size();
             RowNode currentNode = (RowNode) iterator.next();
-            while (currentNode.sa.size()< l-1){
+            while (currentNode.sa.size()<= l-1){
                 Random random = new Random();
                 String tmpSA = (String)sensitiveValueList.get(random.nextInt(limit));
                 if ((tmpSA.compareTo(currentNode.occupation)!=0) && (!currentNode.sa.contains(tmpSA))){
@@ -376,8 +406,12 @@ public class DataProcesser {
         }
     }
 
+    int testlValue = 0;
+    int testlValue2 = 0;
+    boolean testlValueFlag = true;
     //算法G（t,k,d）实现      =======没问题，没有改变vs.list的size
     public ValueSet toGenerate(ValueSet vs,int k,int d){
+
         HashSet<String> sj = new HashSet<String>();
         HashSet<String> saj = new HashSet<String>();
         HashSet<String> sgj = new HashSet<String>();
@@ -391,15 +425,42 @@ public class DataProcesser {
         }
         sgj.addAll(sj);
 
-        LinkedList<String> tmpList = new LinkedList<String>();
-        tmpList.addAll(sj);
-        tmpList.addAll(saj);
+//        LinkedList<String> tmpList = new LinkedList<String>();
+
+        HashSet<String> tmpHashSet = new HashSet<String>();
+        tmpHashSet.addAll(saj);
+        tmpHashSet.addAll(sj);
+
+ //       tmpList.addAll(sj);
+ //       tmpList.addAll(saj);
         LinkedList<String> sajList = new LinkedList<String>();
         sajList.addAll(saj);
+        //测试
+        if (tmpHashSet.size() < lValue){
+            testlValue2++;
+            System.out.println("在随机移除前<l记录："+testlValue2);
+        }
+        if ((vs.list.size()+d) >= lValue){
+            if (tmpHashSet.size()> (vs.list.size() + d)){
 
-        if (tmpList.size()> (vs.list.size()+d)){
+                int i = tmpHashSet.size()-vs.list.size()-d;
+                Random random = new Random();
 
-            int i = tmpList.size()-vs.list.size()-d;
+                for (int j=0;j<i;){
+                    int m = random.nextInt(sajList.size());
+                    if (sj.contains(sajList.get(m))){
+                        continue;
+                    }else {
+                        saj.remove(sajList.get(m));
+                        j++;
+                    }
+                }
+                sgj.addAll(saj);
+            }else {
+                sgj.addAll(saj);
+            }
+        }else {
+            int i = tmpHashSet.size()-lValue;
             Random random = new Random();
 
             for (int j=0;j<i;){
@@ -413,8 +474,15 @@ public class DataProcesser {
             }
             sgj.addAll(saj);
         }
-        sgj.addAll(saj);
 
+//        sgj.addAll(saj);
+
+        //测试
+        if (sgj.size() < lValue){
+            testlValue++;
+            testlValueFlag = false;
+            System.out.println("<l记录："+sgj.size());
+        }
         String race = getSet(vs,1);
         String workclass = getSet(vs,2);
         String maritial_status = getSet(vs,3);
@@ -634,11 +702,26 @@ public class DataProcesser {
         }
     }
 
+    //测试最终划分结果是否满足L多样性条件
+    public void testFinalResulValueSetLDiverse(){
+         if (testlValueFlag){
+            System.out.println("L-diverse Check:Checked！");
+        }else {
+            System.out.println("L-diverse Check:Error！");
+        }
+    }
+
     //最终最终最终Publish()算法实现
     LinkedList<ValueSet> finalResultValueSet = new LinkedList<ValueSet>();
-    public void goPublish(){
-        System.out.println("从MySQL读取数据构造表...");
-        fillData();
+    public void goPublish(int i) throws IOException{
+        if (i==1){
+            System.out.println("从MySQL读取数据构造表...");
+            fillData();
+        }else {
+            System.out.println("从adult.data文件读取数据构造表...");
+            fillDataFromFile(br);
+        }
+
         System.out.println("开始fin1划分...");
         fin1();
         prePublish(root);
@@ -649,7 +732,9 @@ public class DataProcesser {
         }
         getFinalResultValueSetNum();
         testFinalResulValueSetKlimit();
-        System.out.println("写入文件");
+        testFinalResulValueSetLDiverse();
+        System.out.println("写入文件...");
+//        writeResult();
     }
 
     //把结果写文件
@@ -657,9 +742,12 @@ public class DataProcesser {
         int row = 0;
         FileWriter writer = new FileWriter(file);
         BufferedWriter bufferedWriter = new BufferedWriter(writer);
+        //写表头
+        bufferedWriter.write("race\t\tworkclass\tmaritial_status\teducation_num\tnative_country\tage\thours_per_week\tcapital_gain");
+        bufferedWriter.newLine();
         for (Iterator iterator = finalResultValueSet.iterator();iterator.hasNext();){
             bufferedWriter.write("----------------------------------------------" +
-                    "------------------------------------");
+                    "----------------------------------------------------------------");
             bufferedWriter.newLine();
             ValueSet tmpVs = (ValueSet)iterator.next();
             for (Iterator iterator1 = tmpVs.list.iterator();iterator1.hasNext();){
@@ -669,12 +757,12 @@ public class DataProcesser {
                 bufferedWriter.newLine();
             }
             bufferedWriter.write("----------------------------------------------" +
-                    "------------------------------------");
+                    "----------------------------------------------------------------");
             bufferedWriter.newLine();
             bufferedWriter.write(tmpVs.generalizeResult);
             bufferedWriter.newLine();
         }
-        System.out.println("写入行数："+row);
+        System.out.println("写入记录数："+row);
     }
 
 
@@ -1051,8 +1139,10 @@ public class DataProcesser {
 
         @Override
         public String toString(){
-            return new String("{ race:"+raceSet+"\t \tworkclass:"+workclassSet+"\tmaritial_status:"+maritial_statusSet+"\teducation_num:"+education_numRange+"\tnative_country:"+native_countrySet
-                    +"\tage:"+ageRange+"\thours_per_week:"+hours_per_weekRange+"\tcapital_gain:"+capital_gainRange+"}");
+ //           return new String("{ race:"+raceSet+"\t \tworkclass:"+workclassSet+"\tmaritial_status:"+maritial_statusSet+"\teducation_num:"+education_numRange+"\tnative_country:"+native_countrySet
+//                    +"\tage:"+ageRange+"\thours_per_week:"+hours_per_weekRange+"\tcapital_gain:"+capital_gainRange+"}");
+            return new String(raceSet+"\t"+workclassSet+"\t"+maritial_statusSet+"\t"+education_numRange+"\t"+native_countrySet
+                    +"\t"+ageRange+"\t"+hours_per_weekRange+"\t:"+capital_gainRange);
         }
     }
 }

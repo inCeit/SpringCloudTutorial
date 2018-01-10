@@ -6,48 +6,53 @@ public class PrivacyDataReleaseApplication {
     public static void main(String[] args) throws IOException{
 
 
-        int k=5,l=5,d=5;
+        int k=5,l=5,d=0;
+        String fileNmae;
         Scanner in = new Scanner(System.in);
         System.out.println("请输入参数：");
 
-        System.out.println("k-anonymity:");
-        k = in.nextInt();
+        do {
+            System.out.println("k-anonymity(k>0):");
+            k = in.nextInt();
+        }while (k < 0);
+
 
         do {
-            System.out.println("l-diverse(l<=14):");
+            System.out.println("l-diverse(0<l<=14):");
             l = in.nextInt();
         }while (l>14 || l<0);
 
-        System.out.println("d-扰动参数:");
-        d = in.nextInt();
+        do {
+            System.out.println("d-扰动参数(d根据数据实际情况指定，d>=0):");
+            d = in.nextInt();
+        }while (d < 0);
 
-        System.out.println("输入参数为：k="+k+",l="+l+",d="+d);
-        System.out.println("Processing!");
+        System.out.println("输出文件名（仅指定文件名，在程序目录输出）：");
+        fileNmae = in.next();
         in.close();
 
+        System.out.println("输入参数为：k="+k+",l="+l+",d="+d);
+        System.out.println("Start Process!");
 
-
-        String rowRecord = null;
-        int count = 0;
-
+        File directory = new File(".");
+        String path = directory.getCanonicalPath();
+        path += "\\Adult_Data_Set\\";
         //文件读取
-        FileReader reader = new FileReader("C:\\Users\\Administrator\\Desktop\\数据库安全实验\\Adult_Data_Set\\adult.data");
-        File output = new File("C:\\Users\\Administrator\\Desktop\\数据库安全实验\\Adult_Data_Set\\adult.data.output");
+        FileReader reader = new FileReader(path+"\\adult.data");
+        File output = new File(path+fileNmae);
+        if (!output.exists()){
+            output.createNewFile();
+        }
         BufferedReader breader = new BufferedReader(reader);
 
-//        while ((rowRecord=breader.readLine()) != null){
-//            System.out.println(++count);
- //       }
+        DataProcesser dp = new DataProcesser(k,l,d,breader);
+
+        // 1:从数据库读取，0:从adult.data文件读取
+        dp.goPublish(0);
+        dp.writeResult(output);
+
         reader.close();
         breader.close();
-
-        DataProcesser dp = new DataProcesser(7,7,7);
-        dp.goPublish();
-        dp.getFinalResultValueSet();
-//        dp.getFinalResultValueSetNum();
-//        dp.testFinalResulValueSetKlimit();
-        dp.writeResult(output);
-        System.out.println("Success!");
-
+        System.out.println("Process Finish!");
     }
 }
